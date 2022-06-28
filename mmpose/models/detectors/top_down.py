@@ -279,8 +279,11 @@ class TopDown(BasePose):
         for res in result:
             if 'bbox' in res:
                 bbox_result.append(res['bbox'])
-                bbox_labels.append(res.get('label', None))
-            pose_result.append(res['keypoints'])
+                if res['category_id'] == 1:
+                    bbox_labels.append('person '+str(res.get('activity') if res.get('activity') is not None else ''))
+                #bbox_labels.append(res.get('label', None))
+            if res['category_id'] == 1:
+                pose_result.append(res['keypoints'])
 
         if bbox_result:
             bboxes = np.vstack(bbox_result)
