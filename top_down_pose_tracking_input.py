@@ -161,11 +161,11 @@ def main():
            # t = float(box_elem.attrib["ytl"])
            # r = float(box_elem.attrib["xbr"])
            # b = float(box_elem.attrib["ybr"])
-           #w = r - l
+           # w = r - l
             #h = b - t
             w = data["bbox"][2] - data["bbox"][0]
             h = data["bbox"][3] - data["bbox"][1]
-            person['bbox'] = [data["bbox"][0],data["bbox"][1],data["bbox"][2],data["bbox"][3],0.8]
+            person['bbox'] = [data["bbox"][0],data["bbox"][1],data["bbox"][0]+data["bbox"][2],data["bbox"][1]+data["bbox"][3],0.8]
             if 'activity' in data:
                 person['activity'] = data["activity"]
             person['category_id'] = category_id
@@ -205,14 +205,15 @@ def main():
             dataset_info=dataset_info,
             kpt_score_thr=args.kpt_thr,
             show=False)
-
+#person['bbox'] = [pose_results[i]["bbox"][0],pose_results[i]["bbox"][1]pose_results[i]["bbox"][0]+pose_results[i]["bbox"][2],pose_results[i]["bbox"][1]+pose_results[i]["bbox"][3],0.8]
         for i in range(len(pose_results)):
             if pose_results[i]["category_id"] ==  1:
                 dict_obj = {
                     'track_id': pose_results[i]["track_id"],
                     'frame_id': frame_id,
                     'keypoints': pose_results[i]["keypoints"].tolist(),
-                    'bbox': pose_results[i]["bbox"].tolist(),
+                    #'bbox': pose_results[i]["bbox"].tolist(),
+                    'bbox': [pose_results[i]["bbox"][0], pose_results[i]["bbox"][1], pose_results[i]["bbox"][0]+pose_results[i]["bbox"][2],pose_results[i]["bbox"][1]+pose_results[i]["bbox"]],
                     'activity': pose_results[i]["activity"],
                     'category_id': pose_results[i]["category_id"]
                     }
@@ -221,7 +222,8 @@ def main():
                     'track_id': pose_results[i]["track_id"],
                     'frame_id': frame_id,
                     'keypoints': pose_results[i]["keypoints"].tolist(),
-                    'bbox': pose_results[i]["bbox"].tolist(),
+                    #'bbox': pose_results[i]["bbox"].tolist(),
+                    'bbox': [pose_results[i]["bbox"][0], pose_results[i]["bbox"][1], pose_results[i]["bbox"][0]+pose_results[i]["bbox"][2],pose_results[i]["bbox"][1]+pose_results[i]["bbox"]],
                     'category_id': pose_results[i]["category_id"]
                     }
             results['annotations'] .append(dict_obj)
