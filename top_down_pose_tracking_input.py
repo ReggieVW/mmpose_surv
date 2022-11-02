@@ -1,27 +1,24 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+"""
+Adding pose estimations to COCO JSON using the OpenMMLab framework
+"""
 import os
 import warnings
 from argparse import ArgumentParser
 import json
 import cv2
+from datetime import datetime, date
 
 from mmpose.apis import (get_track_id, inference_top_down_pose_model,
                          init_pose_model, process_mmdet_results,
                          vis_pose_tracking_result)
 from mmpose.datasets import DatasetInfo
- 
+
 from mmdet.apis import inference_detector, init_detector
 
 
-
 def main():
-    """Visualize the demo images.
-
-    Using mmdet to detect the human.
-    """
     parser = ArgumentParser()
-  #  parser.add_argument('det_config', help='Config file for detection')
-  #  parser.add_argument('det_checkpoint', help='Checkpoint file for detection')
     parser.add_argument('pose_config', help='Config file for pose')
     parser.add_argument('pose_checkpoint', help='Checkpoint file for pose')
     parser.add_argument('--json-path', type=str, help='JSON path')
@@ -69,17 +66,10 @@ def main():
         default=1,
         help='Link thickness for visualization')
 
-    #assert has_mmdet, 'Please install mmdet to run the demo.'
-
     args = parser.parse_args()
 
     assert args.show or (args.out_video_root != '')
-  #  assert args.det_config is not None
-  #  assert args.det_checkpoint is not None
 
- #   det_model = init_detector(
- #       args.det_config, args.det_checkpoint, device=args.device.lower())
-    # build the pose model from a config file and a checkpoint file
     pose_model = init_pose_model(
         args.pose_config, args.pose_checkpoint, device=args.device.lower())
 
@@ -124,12 +114,26 @@ def main():
     frame_id = 0
     track_ids = []
     pose_results = []
-    pose_results_arr = []
     # Opening JSON file
     json_f = open(args.json_path)
     json_data = json.load(json_f)
     results = {}
+    date_str = f"{date.today():%Y/%m/%d}"
+    results['info'] = {"description": os.path.basename(args.video_path), "data_created": date_str}
+    results['categories'] = []
     results['annotations'] = []
+
+    key_body_labels = ["nose", "left_eye","right_eye","left_ear","right_ear", "left_shoulder", "right_shoulder",  "left_elbow",
+                       "right_elbow",  "left_wrist", "right_wrist", "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"]
+
+    cat_dict_person = {"id": 1, "name": "person",
+                       "keypoints": key_body_labels,
+                        "skeleton" : [[15, 13], [13, 11], [16, 14], [14, 12], [11, 12],
+                        [5, 11], [6, 12], [5, 6], [5, 7], [6, 8], [7, 9],
+                        [8, 10], [1, 2], [0, 1], [0, 2], [1, 3], [2, 4],
+                        [3, 5], [4, 6]],
+                       "supercategory": "person"}
+    results["categories"].append(cat_dict_person)
 
     for data in json_data ["annotations"]:
         track_id = data["track_id"]
@@ -142,11 +146,6 @@ def main():
         flag, img = cap.read()
         if not flag:
             break
-        # test a single image, the resulting box is (x1, y1, x2, y2)
-        #mmdet_results = inference_detector(det_model, img)
-
-        # keep the person class bounding boxes.
-        #person_results = process_mmdet_results(mmdet_results, args.det_cat_id)
 
         person_results = []
         for data in json_data["annotations"]:
@@ -154,23 +153,16 @@ def main():
             if frame_id != frame_json_id:
                 continue
             category_id = data["category_id"] if 'category_id' in data else 1
-            #if category_id != 1:
-            #    continue
+            if category_id != 1:
+                continue
             person = {}
-           # l = float(box_elem.attrib["xtl"])
-           # t = float(box_elem.attrib["ytl"])
-           # r = float(box_elem.attrib["xbr"])
-           # b = float(box_elem.attrib["ybr"])
-           # w = r - l
-            #h = b - t
-            w = data["bbox"][2] - data["bbox"][0]
-            h = data["bbox"][3] - data["bbox"][1]
-            person['bbox'] = [data["bbox"][0],data["bbox"][1],data["bbox"][0]+data["bbox"][2],data["bbox"][1]+data["bbox"][3],0.8]
             if 'activity' in data:
                 person['activity'] = data["activity"]
+            person['track_id'] = data["track_id"]
+            bbox_score = 1.0
+            person['bbox'] = [data["bbox"][0],data["bbox"][1],data["bbox"][0]+data["bbox"][2],data["bbox"][1]+data["bbox"][3], bbox_score]
             person['category_id'] = category_id
             person_results.append(person)
-            print(person)
 
         # test a single image, with a list of bboxes.
         pose_results, returned_outputs = inference_top_down_pose_model(
@@ -183,6 +175,7 @@ def main():
             dataset_info=dataset_info,
             return_heatmap=return_heatmap,
             outputs=output_layer_names)
+
 
         # get track id for each person instance
         pose_results, next_id = get_track_id(
@@ -205,28 +198,31 @@ def main():
             dataset_info=dataset_info,
             kpt_score_thr=args.kpt_thr,
             show=False)
-#person['bbox'] = [pose_results[i]["bbox"][0],pose_results[i]["bbox"][1]pose_results[i]["bbox"][0]+pose_results[i]["bbox"][2],pose_results[i]["bbox"][1]+pose_results[i]["bbox"][3],0.8]
+            
         for i in range(len(pose_results)):
+            pos_arr = pose_results[i]["keypoints"].flatten().tolist()
+            key_point = []
+            for pos in pos_arr:
+                key_point.append(round(pos,3))
             if pose_results[i]["category_id"] ==  1:
                 dict_obj = {
                     'track_id': pose_results[i]["track_id"],
                     'frame_id': frame_id,
-                    'keypoints': pose_results[i]["keypoints"].tolist(),
-                    #'bbox': pose_results[i]["bbox"].tolist(),
-                    'bbox': [pose_results[i]["bbox"][0], pose_results[i]["bbox"][1], pose_results[i]["bbox"][0]+pose_results[i]["bbox"][2],pose_results[i]["bbox"][1]+pose_results[i]["bbox"]],
+                    'keypoints': key_point,
+                    'bbox': [pose_results[i]["bbox"][0], pose_results[i]["bbox"][1], round(pose_results[i]["bbox"][2]-pose_results[i]["bbox"][0],3),round(pose_results[i]["bbox"][3]-pose_results[i]["bbox"][1],3)],
                     'activity': pose_results[i]["activity"],
                     'category_id': pose_results[i]["category_id"]
                     }
-            else:
-                dict_obj = {
-                    'track_id': pose_results[i]["track_id"],
-                    'frame_id': frame_id,
-                    'keypoints': pose_results[i]["keypoints"].tolist(),
-                    #'bbox': pose_results[i]["bbox"].tolist(),
-                    'bbox': [pose_results[i]["bbox"][0], pose_results[i]["bbox"][1], pose_results[i]["bbox"][0]+pose_results[i]["bbox"][2],pose_results[i]["bbox"][1]+pose_results[i]["bbox"]],
-                    'category_id': pose_results[i]["category_id"]
-                    }
-            results['annotations'] .append(dict_obj)
+            #else:
+            #    dict_obj = {
+            #        'track_id': pose_results[i]["track_id"],
+            #        'frame_id': frame_id,
+            #        'keypoints': pose_results[i]["keypoints"].tolist(),
+            #        'bbox': pose_results[i]["bbox"].tolist(),
+            #        'bbox': [pose_results[i]["bbox"][0], pose_results[i]["bbox"][1], pose_results[i]["bbox"][2]-pose_results[i]["bbox"][0],pose_results[i]["bbox"][3]-pose_results[i]["bbox"][1]],
+            #          'category_id': pose_results[i]["category_id"]
+            #        }
+            results['annotations'].append(dict_obj)
 
         if args.show:
             cv2.imshow('Image', vis_img)
@@ -237,11 +233,10 @@ def main():
         if args.show and cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-        print(frame_id)
+        print(f"Frame {frame_id}")
         frame_id += 1
 
-    file_path = "output.json"
-
+    file_path = "annotations.json"
     with open(file_path, "w") as fobj:
       json.dump(results, fobj, indent=2)
 

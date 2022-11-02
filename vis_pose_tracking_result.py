@@ -1,4 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+"""
+Visualize COCO JSON using the OpenMMLab framework
+"""
 import os
 import warnings
 from argparse import ArgumentParser
@@ -10,7 +13,7 @@ from mmpose.apis import (get_track_id, inference_top_down_pose_model,
                          init_pose_model, process_mmdet_results,
                          vis_pose_tracking_result)
 from mmpose.datasets import DatasetInfo
- 
+
 from mmdet.apis import inference_detector, init_detector
 
 def threewise(iterable):
@@ -21,8 +24,6 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('pose_config', help='Config file for pose')
     parser.add_argument('pose_checkpoint', help='Checkpoint file for pose')
-  #  parser.add_argument('det_config', help='Config file for detection')
-  #  parser.add_argument('det_checkpoint', help='Checkpoint file for detection')
     parser.add_argument('--json-path', type=str, help='JSON path')
     parser.add_argument('--video-path', type=str, help='Video path')
     parser.add_argument(
@@ -60,17 +61,10 @@ def main():
         default=1,
         help='Link thickness for visualization')
 
-    #assert has_mmdet, 'Please install mmdet to run the demo.'
-
     args = parser.parse_args()
 
     assert args.show or (args.out_video_root != '')
-  #  assert args.det_config is not None
-  #  assert args.det_checkpoint is not None
 
- #   det_model = init_detector(
- #       args.det_config, args.det_checkpoint, device=args.device.lower())
-    # build the pose model from a config file and a checkpoint file
     pose_model = init_pose_model(
     args.pose_config, args.pose_checkpoint, device=args.device.lower())
 
@@ -106,17 +100,9 @@ def main():
                          f'vis_{os.path.basename(args.video_path)}'), fourcc,
             fps, size)
 
-    # optional
-    return_heatmap = False
-
-    # e.g. use ('backbone', ) to return backbone feature
-    output_layer_names = None
-
-    next_id = 0
     frame_id = 0
     track_ids = []
     pose_results = []
-    pose_results_arr = []
     # Opening JSON file
     json_f = open(args.json_path)
     json_data = json.load(json_f)
@@ -134,11 +120,6 @@ def main():
         flag, img = cap.read()
         if not flag:
             break
-        # test a single image, the resulting box is (x1, y1, x2, y2)
-        #mmdet_results = inference_detector(det_model, img)
-
-        # keep the person class bounding boxes.
-        #person_results = process_mmdet_results(mmdet_results, args.det_cat_id)
 
         pose_results = []
         for data in json_data["annotations"]:
@@ -146,31 +127,22 @@ def main():
             if frame_id != frame_json_id:
                 continue
             category_id = data["category_id"] if 'category_id' in data else 1
-            #if category_id != 1:
-            #    continue
+            if category_id != 1:
+                continue
             person = {}
-           # l = float(box_elem.attrib["xtl"])
-           # t = float(box_elem.attrib["ytl"])
-           # r = float(box_elem.attrib["xbr"])
-           # b = float(box_elem.attrib["ybr"])
-           # w = r - l
-            #h = b - t
-            w = data["bbox"][2] - data["bbox"][0]
-            h = data["bbox"][3] - data["bbox"][1]
-            person['bbox'] = [data["bbox"][0],data["bbox"][1],data["bbox"][0]+data["bbox"][2],data["bbox"][1]+data["bbox"][3],0.8]
+            person['bbox'] = [data["bbox"][0],data["bbox"][1],data["bbox"][0]+data["bbox"][2],data["bbox"][1]+data["bbox"][3],1.0]
             if 'activity' in data:
-                person['activity'] = data["activity"]
+                person['activity'] = str(data["activity"])
             person['category_id'] = category_id
             person['frame_id'] = frame_id
             person['track_id'] = data["track_id"]
             keypoints =  data["keypoints"]
             person_key_points = []
             for x, y, z in threewise(keypoints):
-                person_key_point = [x, y,0.8]
+                person_key_point = [x, y,z]
                 person_key_points.append(person_key_point)
             person["keypoints"] = person_key_points
             pose_results.append(person)
-            print(person)
 
         # show the results
         vis_img = vis_pose_tracking_result(
@@ -184,7 +156,6 @@ def main():
             kpt_score_thr=args.kpt_thr,
             show=False)
 
-
         if args.show:
             cv2.imshow('Image', vis_img)
 
@@ -194,7 +165,7 @@ def main():
         if args.show and cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-        print(frame_id)
+        print(f"Frame {frame_id}")
         frame_id += 1
 
     file_path = "output.json"
