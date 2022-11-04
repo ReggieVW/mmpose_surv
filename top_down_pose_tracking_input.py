@@ -113,10 +113,7 @@ def main():
 
     next_id = 0
     frame_id = 0
-    pose_results = []
     # Opening JSON file
-    json_f = open(args.input_json_path)
-    json_data = json.load(json_f)
     results = {}
     date_str = f"{date.today():%Y/%m/%d}"
     results['info'] = {"description": os.path.basename(args.video_path), "data_created": date_str}
@@ -135,12 +132,16 @@ def main():
                        "supercategory": "person"}
     results["categories"].append(cat_dict_person)
 
+    json_f = open(args.input_json_path)
+    json_data = json.load(json_f)
+
     for data in json_data["annotations"]:
         for data in json_data["categories"]:
             label_name = data["name"]
             if label_name == "person":
                 this_person_cat_id = data["id"]
 
+    pose_results = []
     while (cap.isOpened()):
         pose_results_last = pose_results
         flag, img = cap.read()
