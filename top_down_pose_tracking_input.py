@@ -21,7 +21,8 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('pose_config', help='Config file for pose')
     parser.add_argument('pose_checkpoint', help='Checkpoint file for pose')
-    parser.add_argument('--json-path', type=str, help='JSON path')
+    parser.add_argument('--input-json-path', type=str, help='JSON path')
+    parser.add_argument('--output-json-path', type=str, help='JSON path')
     parser.add_argument('--video-path', type=str, help='Video path')
     parser.add_argument(
         '--show',
@@ -112,10 +113,9 @@ def main():
 
     next_id = 0
     frame_id = 0
-    track_ids = []
     pose_results = []
     # Opening JSON file
-    json_f = open(args.json_path)
+    json_f = open(args.input_json_path)
     json_data = json.load(json_f)
     results = {}
     date_str = f"{date.today():%Y/%m/%d}"
@@ -135,33 +135,41 @@ def main():
                        "supercategory": "person"}
     results["categories"].append(cat_dict_person)
 
-    for data in json_data ["annotations"]:
-        track_id = data["track_id"]
-        if track_id not in track_ids:
-            track_ids.append(track_id)
+    for data in json_data["annotations"]:
+        for data in json_data["categories"]:
+            label_name = data["name"]
+            if label_name == "person":
+                this_person_cat_id = data["id"]
 
     while (cap.isOpened()):
         pose_results_last = pose_results
-
         flag, img = cap.read()
         if not flag:
             break
-
         person_results = []
         for data in json_data["annotations"]:
-            frame_json_id = data["frame_id"]
+            if data.get("frame_id"):
+                frame_json_id = data["frame_id"]
+            elif data.get("image_id"):
+                frame_json_id = data["image_id"] - 1
             if frame_id != frame_json_id:
                 continue
-            category_id = data["category_id"] if 'category_id' in data else 1
-            if category_id != 1:
+            category_id = data["category_id"]
+            if category_id != this_person_cat_id:
                 continue
             person = {}
-            if 'activity' in data:
+            person['activity'] = ""
+            if data.get("activity"):
                 person['activity'] = data["activity"]
-            person['track_id'] = data["track_id"]
+            elif data["attributes"].get("activity"):
+                person['activity'] = data["attributes"]["activity"]
+            if data.get("track_id"):
+                person['track_id'] = data["track_id"]
+            elif data["attributes"].get("track_id"):
+                person['track_id'] = data["attributes"]["track_id"]
             bbox_score = 1.0
             person['bbox'] = [data["bbox"][0],data["bbox"][1],data["bbox"][0]+data["bbox"][2],data["bbox"][1]+data["bbox"][3], bbox_score]
-            person['category_id'] = category_id
+            person['category_id'] = 1
             person_results.append(person)
 
         # test a single image, with a list of bboxes.
@@ -210,8 +218,8 @@ def main():
                     'frame_id': frame_id,
                     'keypoints': key_point,
                     'bbox': [pose_results[i]["bbox"][0], pose_results[i]["bbox"][1], round(pose_results[i]["bbox"][2]-pose_results[i]["bbox"][0],3),round(pose_results[i]["bbox"][3]-pose_results[i]["bbox"][1],3)],
-                    'activity': pose_results[i]["activity"],
-                    'category_id': pose_results[i]["category_id"]
+                    'activity': pose_results[i].get("activity"),
+                    'category_id': 1
                     }
             #else:
             #    dict_obj = {
@@ -236,8 +244,11 @@ def main():
         print(f"Frame {frame_id}")
         frame_id += 1
 
-    file_path = "annotations.json"
-    with open(file_path, "w") as fobj:
+    output_file_path = "annotations.json"
+    if args.output_json_path:
+        output_file_path = args.output_json_path
+
+    with open(output_file_path, "w") as fobj:
       json.dump(results, fobj, indent=2)
 
     cap.release()
